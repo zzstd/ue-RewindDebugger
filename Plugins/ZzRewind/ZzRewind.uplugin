@@ -1,0 +1,33 @@
+﻿{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "ZzRewind",
+	"Description": "a lightweight and scalable runtime rewind debugger",
+	"Category": "Other",
+	"CreatedBy": "zz studio",
+	"CreatedByURL": "zzstd@outlook.com",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "ZzRewindRuntime",
+			"Type": "Runtime",
+			"LoadingPhase": "PreDefault"
+		},
+		{
+			"Name": "ZzRewindDebuggerEditor",
+			"Type": "Editor",
+			"LoadingPhase": "PostEngineInit"
+		},
+		{
+			"Name": "ZzRewindBlueprint",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}
