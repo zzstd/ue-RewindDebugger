@@ -13,7 +13,7 @@ class ZZREWINDRUNTIME_API AZzRewindPreviewMeshActor : public AActor
 public:
 	AZzRewindPreviewMeshActor();
 	
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="PreviewMeshActor")
 	USkeletalMeshComponent* Mesh;
 
 	void SetupFromSkMeshComp(USkeletalMeshComponent* InMesh);
@@ -40,6 +40,6 @@ class ZZREWINDRUNTIME_API AZzRewindPreviewCameraActor : public AActor
 public:
 	AZzRewindPreviewCameraActor();
 	
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="PreviewCameraActor")
 	class UCameraComponent* Camera;
 };

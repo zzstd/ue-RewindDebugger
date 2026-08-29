@@ -10,10 +10,18 @@ void UZzRewindRuntimeWorldSubsystem::Initialize(FSubsystemCollectionBase& Collec
 {
 	Super::Initialize(Collection);
 
-	if (UZzRewindSetting::Get().RecordTickMode == UZzRewindSetting::EngineTickModeName)
+	RewindDebugger = ZZ::Rewind::FZzRewindRuntime::Get();
+}
+
+void UZzRewindRuntimeWorldSubsystem::Deinitialize()
+{
+	if (RewindDebugger)
 	{
-		RewindDebugger = ZZ::Rewind::FZzRewindRuntime::Get();
+		RewindDebugger->HandleWorldCleanup(GetWorld());
+		RewindDebugger.Reset();
 	}
+
+	Super::Deinitialize();
 }
 
 TStatId UZzRewindRuntimeWorldSubsystem::GetStatId() const
@@ -25,8 +33,8 @@ void UZzRewindRuntimeWorldSubsystem::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	if (RewindDebugger)
+	if (RewindDebugger && UZzRewindSetting::Get().RecordTickMode == UZzRewindSetting::EngineTickModeName)
 	{
-		RewindDebugger->ReceiveTick(TickCounter++);
+		RewindDebugger->ReceiveTick(GetWorld(), TickCounter++);
 	}
 }

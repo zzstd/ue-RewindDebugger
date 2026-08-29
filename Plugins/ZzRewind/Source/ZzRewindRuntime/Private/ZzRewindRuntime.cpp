@@ -30,12 +30,18 @@ void FZzRewindRuntime::Cleanup()
 {
 	StopRecord();
 
+	if (CachedRewindWorld.IsValid())
+	{
+		OnRewindCleanup(CachedRewindWorld.Get());
+	}
+
 	SetSelectedItem(nullptr);
 	
 	PrimaryItems.Empty();
 	WeakAllItems.Empty();
 
 	MaxFrame = 0;
+	bHasRecordedFrame = false;
 	ViewRange.X = -5;
 	ViewRange.Y = 0;
 	DesiredViewRange = ViewRange;
@@ -43,9 +49,9 @@ void FZzRewindRuntime::Cleanup()
 	OnCleanupDelegate.Broadcast();
 }
 
-void FZzRewindRuntime::ReceiveTick(int32 Frame)
+void FZzRewindRuntime::ReceiveTick(const UWorld* World, int32 Frame)
 {
-	if (bShouldRecord)
+	if (bShouldRecord && World && RecordingWorld.Get() == World)
 	{
 		OnRecord(Frame);
 	}
@@ -59,6 +65,7 @@ void FZzRewindRuntime::OnRecord(int32 Frame)
 		Item->OnRecord(Frame);
 	}
 
+	bHasRecordedFrame = true;
 	MaxFrame = Frame;
 	SetScrubFrame(Frame, EScrubTimeInfo::OnRecording);
 	
@@ -72,7 +79,7 @@ void FZzRewindRuntime::OnRewind(UWorld* World, int32 Frame)
 {
 	check(World)
 	
-	if (ensure(!CachedRewindWorld || CachedRewindWorld == World))
+	if (ensure(!CachedRewindWorld.IsValid() || CachedRewindWorld.Get() == World))
 	{ 
 		CachedRewindWorld = World;
 	
@@ -88,9 +95,9 @@ void FZzRewindRuntime::OnRewindCleanup(UWorld* World)
 {
 	check(World)
 
-	if (ensure(World == CachedRewindWorld))
+	if (CachedRewindWorld.Get() == World)
 	{
-		CachedRewindWorld = nullptr;
+		CachedRewindWorld.Reset();
 	
 		auto TempItems = PrimaryItems;
 		for (auto Item : TempItems)
@@ -100,15 +107,40 @@ void FZzRewindRuntime::OnRewindCleanup(UWorld* World)
 	}
 }
 
+void FZzRewindRuntime::HandleWorldCleanup(UWorld* World)
+{
+	if (!World)
+	{
+		return;
+	}
+
+	if (RecordingWorld.Get() == World)
+	{
+		StopRecord();
+	}
+
+	if (CachedRewindWorld.Get() == World)
+	{
+		OnRewindCleanup(World);
+	}
+}
+
 bool FZzRewindRuntime::HasRecordData() const
 {
-	return MaxFrame > 0 && !PrimaryItems.IsEmpty();
+	return bHasRecordedFrame && !PrimaryItems.IsEmpty();
 }
 
 void FZzRewindRuntime::SetDesiredViewRange(double NewBeginTime, double NewEndTime)
 {
-	DesiredViewRange.X = FUtils::Align(NewBeginTime);
-	DesiredViewRange.Y = FUtils::Align(NewEndTime);
+	NewBeginTime = FUtils::Align(NewBeginTime);
+	NewEndTime = FUtils::Align(NewEndTime);
+	if (!FMath::IsFinite(NewBeginTime) || !FMath::IsFinite(NewEndTime))
+	{
+		return;
+	}
+
+	DesiredViewRange.X = NewBeginTime;
+	DesiredViewRange.Y = FMath::Max(NewEndTime, NewBeginTime + 1.0 / 60.0);
 }
 
 void FZzRewindRuntime::UpdateSmoothViewRange(float InDeltaTime)
@@ -119,6 +151,7 @@ void FZzRewindRuntime::UpdateSmoothViewRange(float InDeltaTime)
 
 void FZzRewindRuntime::SetScrubFrame(int32 NewFrame, EScrubTimeInfo::Type Info)
 {
+	NewFrame = FMath::Clamp(NewFrame, 0, MaxFrame);
 	ScrubFrame = NewFrame;
 	OnScrubFrameChanged.Broadcast(NewFrame, Info);
 }

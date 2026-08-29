@@ -27,11 +27,11 @@ public:
 	{
 		float Pos;
 		float PlayRate;
-		float Widget;
-		float DesiredWidget;
+		float Weight;
+		float DesiredWeight;
 		bool operator==(const FMontageInst& Other) const
 		{
-			return Pos == Other.Pos && PlayRate == Other.PlayRate && DesiredWidget == Other.DesiredWidget;
+			return Pos == Other.Pos && PlayRate == Other.PlayRate && Weight == Other.Weight && DesiredWeight == Other.DesiredWeight;
 		}
 	};
 	

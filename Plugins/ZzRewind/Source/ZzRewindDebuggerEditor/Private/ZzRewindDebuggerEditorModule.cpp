@@ -21,6 +21,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "SLevelViewport.h"
 #include "UnrealEdGlobals.h"
+#include "ZzRewindEditorStyle.h"
 #include "ZzRewindRuntimeModule.h"
 #include "GameFramework/Character.h"
 #include "Editor/UnrealEdEngine.h"
@@ -37,10 +38,12 @@ void FZzRewindDebuggerEditorModule::StartupModule()
 {
 	using namespace ZZ::Rewind;
 	
+	FZzRewindEditorStyle::Initialize();
 	RewindRuntime = FZzRewindRuntime::Get();
 
 	FLevelEditorModule& LevelEditorModule = FModuleManager::GetModuleChecked<FLevelEditorModule>("LevelEditor");
 	PIEHandle[0] = LevelEditorModule.OnTabManagerChanged().AddRaw(this, &FZzRewindDebuggerEditorModule::OnTabManagerChanged);
+	OnTabManagerChanged();
 	
 	PIEHandle[1] = FEditorDelegates::PostPIEStarted.AddRaw(this, &FZzRewindDebuggerEditorModule::OnPIEStarted);
 	PIEHandle[2] = FEditorDelegates::PausePIE.AddRaw(this, &FZzRewindDebuggerEditorModule::OnPIEPause);
@@ -62,8 +65,49 @@ void FZzRewindDebuggerEditorModule::StartupModule()
  
 void FZzRewindDebuggerEditorModule::ShutdownModule()
 {
-	FLevelEditorModule& LevelEditorModule = FModuleManager::GetModuleChecked<FLevelEditorModule>("LevelEditor");
-	LevelEditorModule.OnTabManagerChanged().Remove(PIEHandle[0]);
+	CleanupRewind();
+
+	if (TSharedPtr<SDockTab> Tab = RewindTimelineTab.Pin())
+	{
+		Tab->SetOnTabClosed(SDockTab::FOnTabClosedCallback());
+		Tab->SetContent(SNullWidget::NullWidget);
+		Tab->RequestCloseTab();
+	}
+	if (TSharedPtr<SDockTab> Tab = RewindInspectorTab.Pin())
+	{
+		Tab->SetOnTabClosed(SDockTab::FOnTabClosedCallback());
+		Tab->SetContent(SNullWidget::NullWidget);
+		Tab->RequestCloseTab();
+	}
+	RewindTimelineTab.Reset();
+	RewindInspectorTab.Reset();
+	RewindTimelineWidget.Reset();
+	RewindInspectorWidget.Reset();
+
+	if (RewindRuntime)
+	{
+		RewindRuntime->OnScrubFrameChanged.RemoveAll(this);
+		RewindRuntime->OnPostAddItemDelegate.RemoveAll(this);
+		RewindRuntime->OnOpenAssetEditorDelegate.RemoveAll(this);
+		RewindRuntime->OnTimelineSectionChanged.RemoveAll(this);
+	}
+
+	if (FZzRewindRuntimeModule* RuntimeModule = FModuleManager::GetModulePtr<FZzRewindRuntimeModule>("ZzRewindRuntime"))
+	{
+		RuntimeModule->ToolbarBuilder.Unbind();
+	}
+
+	if (TSharedPtr<FTabManager> TabManager = RegisteredTabManager.Pin())
+	{
+		TabManager->UnregisterTabSpawner(MainTabName);
+		TabManager->UnregisterTabSpawner(InspectorTabName);
+	}
+	RegisteredTabManager.Reset();
+
+	if (FLevelEditorModule* LevelEditorModule = FModuleManager::GetModulePtr<FLevelEditorModule>("LevelEditor"))
+	{
+		LevelEditorModule->OnTabManagerChanged().Remove(PIEHandle[0]);
+	}
 	
 	FEditorDelegates::PostPIEStarted.Remove(PIEHandle[1]);
 	FEditorDelegates::PausePIE.Remove(PIEHandle[2]);
@@ -71,6 +115,8 @@ void FZzRewindDebuggerEditorModule::ShutdownModule()
 	FEditorDelegates::ShutdownPIE.Remove(PIEHandle[4]);
 	
 	FWorldDelegates::OnWorldCleanup.Remove(PIEHandle[5]);
+	RewindRuntime.Reset();
+	FZzRewindEditorStyle::Shutdown();
 }
 
 FZzRewindDebuggerEditorModule& FZzRewindDebuggerEditorModule::Get()
@@ -82,6 +128,17 @@ void FZzRewindDebuggerEditorModule::OnTabManagerChanged()
 {
 	FLevelEditorModule& LevelEditorModule = FModuleManager::GetModuleChecked<FLevelEditorModule>("LevelEditor");
 	TSharedPtr<FTabManager> LevelEditorTabManager = LevelEditorModule.GetLevelEditorTabManager();
+	if (!LevelEditorTabManager)
+	{
+		return;
+	}
+
+	if (TSharedPtr<FTabManager> OldTabManager = RegisteredTabManager.Pin())
+	{
+		OldTabManager->UnregisterTabSpawner(MainTabName);
+		OldTabManager->UnregisterTabSpawner(InspectorTabName);
+	}
+	RegisteredTabManager = LevelEditorTabManager;
 
 	LevelEditorTabManager->RegisterTabSpawner(
 		MainTabName, FOnSpawnTab::CreateRaw(this, &FZzRewindDebuggerEditorModule::SpawnRewindDebuggerTab))
@@ -104,13 +161,18 @@ TSharedRef<SDockTab> FZzRewindDebuggerEditorModule::SpawnRewindDebuggerTab(const
 	
 	const TSharedRef<SDockTab> MajorTab = SNew(SDockTab)
 		.TabRole(ETabRole::PanelTab)
-		.OnTabClosed_Lambda([this](TSharedRef<SDockTab>)
+		.OnTabClosed_Lambda([this](TSharedRef<SDockTab> ClosedTab)
 		{
-			RewindTimelineWidget = nullptr;
-			ResetDebuggerEditor();
+			if (RewindTimelineTab.Pin() == ClosedTab)
+			{
+				RewindTimelineWidget.Reset();
+				RewindTimelineTab.Reset();
+				ResetDebuggerEditor();
+			}
 		});
 
 	MajorTab->SetContent(SAssignNew(RewindTimelineWidget, STimelineView));
+	RewindTimelineTab = MajorTab;
 	return MajorTab;
 }
 
@@ -120,12 +182,17 @@ TSharedRef<SDockTab> FZzRewindDebuggerEditorModule::SpawnRewindDebuggerInspector
 	
 	const TSharedRef<SDockTab> MajorTab = SNew(SDockTab)
 		.TabRole(ETabRole::PanelTab)
-		.OnTabClosed_Lambda([this](TSharedRef<SDockTab>)
+		.OnTabClosed_Lambda([this](TSharedRef<SDockTab> ClosedTab)
 		{
-			RewindInspectorWidget = nullptr;
+			if (RewindInspectorTab.Pin() == ClosedTab)
+			{
+				RewindInspectorWidget.Reset();
+				RewindInspectorTab.Reset();
+			}
 		});
 
 	MajorTab->SetContent(SAssignNew(RewindInspectorWidget, SRewindInspector));
+	RewindInspectorTab = MajorTab;
 	return MajorTab;
 }
 
@@ -262,12 +329,15 @@ void FZzRewindDebuggerEditorModule::OnOpenAssetEditor(UObject* Asset)
 
 void FZzRewindDebuggerEditorModule::TryInvokeInspector()
 {
-	const FLevelEditorModule& LevelEditorModule = FModuleManager::GetModuleChecked<FLevelEditorModule>("LevelEditor");
-	const TSharedPtr<FTabManager> LevelEditorTabManager = LevelEditorModule.GetLevelEditorTabManager();
+	const TSharedPtr<FTabManager> TabManager = RegisteredTabManager.Pin();
+	if (!TabManager)
+	{
+		return;
+	}
 
 	// if we now have no selection, don't force the tab into focus - this happens when tracks disappear and can cause PIE to lose focus while playing
 	const bool bInvokeAsInactive = !RewindRuntime->SelectedItem.IsValid();
-	const TSharedPtr<SDockTab> DetailsTab = LevelEditorTabManager->TryInvokeTab(InspectorTabName, bInvokeAsInactive);
+	TabManager->TryInvokeTab(InspectorTabName, bInvokeAsInactive);
 
 }
 
@@ -280,13 +350,15 @@ void FZzRewindDebuggerEditorModule::ResetDebuggerEditor()
 void FZzRewindDebuggerEditorModule::CleanupRewind()
 {
 	LastRewindFrame = 0;
-	PreviewFollowCameraActor.Reset();
+	CleanupPreviewCamera();
 
 	if (CachedRewindWorld)
 	{
 		RewindRuntime->OnRewindCleanup(CachedRewindWorld);
 		CachedRewindWorld = nullptr;
 	}
+
+	CameraItem.Reset();
 }
 
 void FZzRewindDebuggerEditorModule::OnRewindUpdate(int32 NewFrame, bool bPlaying)
@@ -340,7 +412,15 @@ void FZzRewindDebuggerEditorModule::UpdateFollowCamera(int32 NewFrame, TSharedPt
 	AZzRewindPreviewCameraActor* Actor = PreviewFollowCameraActor.Get();
 	if (!Actor)
 	{
-		Actor = CachedRewindWorld->SpawnActor<AZzRewindPreviewCameraActor>();
+		FActorSpawnParameters SpawnParameters;
+		SpawnParameters.ObjectFlags |= RF_Transient;
+		SpawnParameters.bHideFromSceneOutliner = true;
+		Actor = CachedRewindWorld->SpawnActor<AZzRewindPreviewCameraActor>(SpawnParameters);
+		if (!Actor)
+		{
+			return;
+		}
+
 		if (CachedRewindWorld->CachedViewInfoRenderedLastFrame.Num() > 0)
 		{
 			FMatrix ViewToWorld = CachedRewindWorld->CachedViewInfoRenderedLastFrame[0].ViewToWorld;
@@ -384,6 +464,28 @@ void FZzRewindDebuggerEditorModule::SetViewportCameraTo(AActor* InPreviewActor)
 	}
 }
 
+void FZzRewindDebuggerEditorModule::CleanupPreviewCamera()
+{
+	if (FLevelEditorModule* LevelEditor = FModuleManager::GetModulePtr<FLevelEditorModule>("LevelEditor"))
+	{
+		if (TSharedPtr<SLevelViewport> LevelViewport = LevelEditor->GetFirstActiveLevelViewport())
+		{
+			FLevelEditorViewportClient& ViewportClient = LevelViewport->GetLevelViewportClient();
+			if (ViewportClient.GetActiveActorLock() == CachedRewindCameraActor)
+			{
+				ViewportClient.SetActorLock(nullptr);
+			}
+		}
+	}
+
+	CachedRewindCameraActor.Reset();
+	if (AZzRewindPreviewCameraActor* Actor = PreviewFollowCameraActor.Get())
+	{
+		Actor->Destroy();
+	}
+	PreviewFollowCameraActor.Reset();
+}
+
 void FZzRewindDebuggerEditorModule::SetCameraMode(int32 InMode)
 {
 	CameraMode = InMode;
@@ -395,12 +497,7 @@ void FZzRewindDebuggerEditorModule::SetCameraMode(int32 InMode)
 	
 	if (CameraMode != 1)
 	{
-		// Destroy the follow camera so the next session starts from the current viewport transform.
-		if (PreviewFollowCameraActor.IsValid())
-		{
-			PreviewFollowCameraActor->Destroy();
-		}
-		PreviewFollowCameraActor.Reset();
+		CleanupPreviewCamera();
 	}
 }
 

@@ -47,8 +47,8 @@ void FRewindItem_SkMesh::OnRecord(int32 Frame)
 					FRewindItem_MontageInstance::FMontageInst MontageRef;
 					MontageRef.Pos = MontageInst->GetPosition();
 					MontageRef.PlayRate = MontageInst->GetPlayRate();
-					MontageRef.Widget = MontageInst->GetWeight();
-					MontageRef.DesiredWidget = MontageInst->GetDesiredWeight();
+					MontageRef.Weight = MontageInst->GetWeight();
+					MontageRef.DesiredWeight = MontageInst->GetDesiredWeight();
 
 					FindOrCreateMontageItem(MontageInst->Montage)->MontageInstData.Append(Frame, MontageRef);
 				}
@@ -61,8 +61,10 @@ void FRewindItem_SkMesh::OnRewind(UWorld* World, int32 Frame)
 {
 	FRewindFrameItem::OnRewind(World, Frame);
 	
-	auto p = PoseData.Find(Frame);
-	if (!p)
+	const FSkMeshPoseData* PoseDataAtFrame = PoseData.Find(Frame);
+	const FSkMeshAssetData* MeshDataAtFrame = AssetData.Find(Frame);
+	USkeletalMesh* RecordedMesh = MeshDataAtFrame ? MeshDataAtFrame->SkMesh.WeakObject.Get() : nullptr;
+	if (!PoseDataAtFrame || !RecordedMesh)
 	{
 		return;
 	}
@@ -70,15 +72,17 @@ void FRewindItem_SkMesh::OnRewind(UWorld* World, int32 Frame)
 	AZzRewindPreviewMeshActor* Actor = PreviewMeshActor.Get();
 	if (!Actor)
 	{
-		if (SkMeshComp.WeakObject.IsValid())
+		Actor = SpawnPreviewActor(World);
+		if (Actor)
 		{
-			Actor = SpawnPreviewActor(World);
-			Actor->SetupFromSkMeshComp(SkMeshComp.WeakObject.Get());
-		}
-		else if (auto FindSkMesh = AssetData.Find(Frame))
-		{
-			Actor = SpawnPreviewActor(World);
-			Actor->SetupFromSkMeshAsset(FindSkMesh->SkMesh.WeakObject.Get());
+			if (SkMeshComp.WeakObject.IsValid())
+			{
+				Actor->SetupFromSkMeshComp(SkMeshComp.WeakObject.Get());
+			}
+			else
+			{
+				Actor->SetupFromSkMeshAsset(RecordedMesh);
+			}
 		}
 		
 		PreviewMeshActor = Actor;
@@ -88,8 +92,20 @@ void FRewindItem_SkMesh::OnRewind(UWorld* World, int32 Frame)
 	{
 		return;
 	}
+
+	if (Actor->Mesh->GetSkeletalMeshAsset() != RecordedMesh)
+	{
+		Actor->SetupFromSkMeshAsset(RecordedMesh);
+	}
 	
-	Actor->UpdatePose(p->ComponentTF, p->PoseTF);
+	TArray<FTransform> Pose;
+	Pose.Reserve(PoseDataAtFrame->PoseTF.Num());
+	for (const FTransform3f& Transform : PoseDataAtFrame->PoseTF)
+	{
+		Pose.Emplace(Transform);
+	}
+
+	Actor->UpdatePose(PoseDataAtFrame->ComponentTF, Pose);
 }
 
 void FRewindItem_SkMesh::OnRewindCleanup(UWorld* World)
@@ -106,6 +122,16 @@ void FRewindItem_SkMesh::OnRewindCleanup(UWorld* World)
 FText FRewindItem_SkMesh::GetDisplayName() const
 {
 	return FText::FromString(SkMeshComp.ObjectName);
+}
+
+FRewindItem_SkMesh::FSkMeshPoseData::FSkMeshPoseData(const FTransform& WorldTF, const TArray<FTransform>& InTf)
+	: ComponentTF(WorldTF)
+{
+	PoseTF.Reserve(InTf.Num());
+	for (const FTransform& Transform : InTf)
+	{
+		PoseTF.Emplace(Transform);
+	}
 }
 
 bool FRewindItem_SkMesh::FSkMeshPoseData::operator==(const FSkMeshPoseData& Other) const

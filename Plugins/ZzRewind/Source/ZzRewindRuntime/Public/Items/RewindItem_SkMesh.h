@@ -35,11 +35,9 @@ public:
 		// world transform
 		FTransform ComponentTF;
 
-		TArray<FTransform> PoseTF;
+		TArray<FTransform3f> PoseTF;
 
-		FSkMeshPoseData(const FTransform& WorldTF, const TArray<FTransform>& InTf)
-			: ComponentTF(WorldTF), PoseTF(InTf)
-		{ }
+		FSkMeshPoseData(const FTransform& WorldTF, const TArray<FTransform>& InTf);
 
 		bool operator==(const FSkMeshPoseData&) const;
 	};

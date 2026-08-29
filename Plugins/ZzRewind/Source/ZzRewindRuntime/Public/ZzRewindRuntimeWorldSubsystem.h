@@ -18,6 +18,7 @@ class ZZREWINDRUNTIME_API UZzRewindRuntimeWorldSubsystem : public UTickableWorld
 	GENERATED_BODY()
 public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+	virtual void Deinitialize() override;
 	
 	virtual TStatId GetStatId() const override;
 	virtual void Tick(float DeltaTime) override;

@@ -159,8 +159,9 @@ void SRewindFrameRow::PaintItems(const FGeometry& AllottedGeometry, FSlateWindow
 	
 	int32 ViewBegin, ViewEnd;
 	FUtils::ExpandViewRangeFrame(Debugger, ViewBegin, ViewEnd);
-	for (int32 CurFrame = ViewBegin; CurFrame <= ViewEnd; ++CurFrame)
+	for (int64 CurFrame64 = ViewBegin; CurFrame64 <= ViewEnd; ++CurFrame64)
 	{
+		const int32 CurFrame = static_cast<int32>(CurFrame64);
 		FRewindFrameItem::FPaintItemData PaintData;
 		StrongItem->OnPaintItem(CurFrame, PaintData);
 			
@@ -169,11 +170,17 @@ void SRewindFrameRow::PaintItems(const FGeometry& AllottedGeometry, FSlateWindow
 			continue;
 		}
 
-		const int32 ItemStartFrame = PaintData.StartFrame;
-		const int32 ItemEndFrame = PaintData.EndFrame;
+		if (!ensure(PaintData.StartFrame <= CurFrame && CurFrame <= PaintData.EndFrame))
+		{
+			continue;
+		}
+
+		const int32 ItemStartFrame = FMath::Max(PaintData.StartFrame, ViewBegin);
+		const int32 ItemEndFrame = FMath::Min(PaintData.EndFrame, ViewEnd);
+		const int64 ItemFrameCount = static_cast<int64>(ItemEndFrame) - ItemStartFrame + 1;
 
 		const float OffsetX = FUtils::FrameToLocal(Debugger, AllottedGeometry, ItemStartFrame);
-		const float SizeX = FUtils::SingleFrameSizeX(Debugger, AllottedGeometry) * (ItemEndFrame - ItemStartFrame + 1);
+		const float SizeX = FUtils::SingleFrameSizeX(Debugger, AllottedGeometry) * ItemFrameCount;
 
 		auto ItemGeo = AllottedGeometry.ToPaintGeometry({SizeX, AllottedGeometry.GetLocalSize().Y}, FSlateLayoutTransform({OffsetX, 0}));
 		
@@ -200,7 +207,7 @@ void SRewindFrameRow::PaintItems(const FGeometry& AllottedGeometry, FSlateWindow
 			DrawHoveredEffect(ItemGeo,OutDrawElements, LayerId + 1);
 		}
 
-		CurFrame = ItemEndFrame;
+		CurFrame64 = ItemEndFrame;
 	}
 }
 

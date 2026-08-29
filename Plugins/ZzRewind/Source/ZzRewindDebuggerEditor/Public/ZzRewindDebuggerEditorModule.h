@@ -34,6 +34,9 @@ public:
 	TSharedPtr<ZZ::Rewind::FZzRewindRuntime> RewindRuntime;
 private:
 	FDelegateHandle PIEHandle[6];
+	TWeakPtr<FTabManager> RegisteredTabManager;
+	TWeakPtr<SDockTab> RewindTimelineTab;
+	TWeakPtr<SDockTab> RewindInspectorTab;
 
 	void OnTabManagerChanged();
 	
@@ -73,6 +76,7 @@ private:
 	
 	TWeakObjectPtr<class AActor> CachedRewindCameraActor;
 	void SetViewportCameraTo(AActor* InPreviewActor);
+	void CleanupPreviewCamera();
 public:
 	void SetCameraMode(int32 InMode);
 	int32 GetCameraMode() const;

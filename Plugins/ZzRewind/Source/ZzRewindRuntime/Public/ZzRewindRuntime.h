@@ -24,7 +24,7 @@ public:
 	void Cleanup();
 
 	// Receive world tick，will call OnRecord to record one frame
-	void ReceiveTick(int32 Frame);
+	void ReceiveTick(const UWorld* World, int32 Frame);
 
 	void StartRecord(const UWorld* InWorld);
 	
@@ -36,6 +36,7 @@ public:
 
 	void OnRewind(UWorld* World, int32 Frame);
 	void OnRewindCleanup(UWorld* World);
+	void HandleWorldCleanup(UWorld* World);
 
 	bool HasRecordData() const;
 
@@ -57,8 +58,9 @@ public:
 	void SetSelectedItem(TSharedPtr<FRewindItem> NewSelectedItem);
 
 	TSharedPtr<FRewindItem> SelectedItem;
-	int32 ScrubFrame;
-	int32 MaxFrame;
+	int32 ScrubFrame = 0;
+	int32 MaxFrame = 0;
+	bool bHasRecordedFrame = false;
 	FVector2D ViewRange;
 	// smooth view motion
 	FVector2D DesiredViewRange;
@@ -84,7 +86,7 @@ public:
 	TSharedPtr<FRewindItem> FindItemWithTag(FName InTag, bool bPrimaryOnly = true) const;
 
 	bool bRequestViewRefresh = false;
-	class UWorld* CachedRewindWorld;
+	TWeakObjectPtr<UWorld> CachedRewindWorld;
 };
 
 

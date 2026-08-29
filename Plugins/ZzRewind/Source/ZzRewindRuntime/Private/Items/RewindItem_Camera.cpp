@@ -26,7 +26,8 @@ bool FRewindItemCameraData::operator==(const FRewindItemCameraData& Other) const
 	return Loc.Equals(Other.Loc)
 		&& Rot.Equals(Other.Rot)
 		&& FMath::IsNearlyEqual(FOV, Other.FOV)
-		&& FMath::IsNearlyEqual(AspectRatio, Other.AspectRatio);
+		&& FMath::IsNearlyEqual(AspectRatio, Other.AspectRatio)
+		&& AspectRatioAxisConstraint == Other.AspectRatioAxisConstraint;
 }
 
 FRewindItem_Camera::FRewindItem_Camera()
@@ -89,7 +90,12 @@ void FRewindItem_Camera::UpdatePreviewCamera(UWorld* World, const FRewindItemCam
 	AZzRewindPreviewCameraActor* Actor = PreviewCameraActor.Get();
 	if (!Actor)
 	{
-		Actor = World->SpawnActor<AZzRewindPreviewCameraActor>();
+		FActorSpawnParameters SpawnParameters;
+		SpawnParameters.ObjectFlags |= RF_Transient;
+#if WITH_EDITOR
+		SpawnParameters.bHideFromSceneOutliner = true;
+#endif
+		Actor = World->SpawnActor<AZzRewindPreviewCameraActor>(SpawnParameters);
 		PreviewCameraActor = Actor;
 	}
 
@@ -101,6 +107,7 @@ void FRewindItem_Camera::UpdatePreviewCamera(UWorld* World, const FRewindItemCam
 	Actor->Camera->SetWorldLocationAndRotation(InViewData.Loc, InViewData.Rot);
 	Actor->Camera->SetFieldOfView(InViewData.FOV);
 	Actor->Camera->SetAspectRatio(InViewData.AspectRatio);
+	Actor->Camera->bOverrideAspectRatioAxisConstraint = InViewData.AspectRatioAxisConstraint.IsSet();
 	if (InViewData.AspectRatioAxisConstraint.IsSet())
 	{
 		Actor->Camera->SetAspectRatioAxisConstraint(InViewData.AspectRatioAxisConstraint.GetValue());

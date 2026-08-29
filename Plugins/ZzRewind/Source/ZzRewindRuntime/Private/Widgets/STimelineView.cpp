@@ -172,7 +172,6 @@ void STimelineView::BuildItems(TSharedRef<FRewindItem> InItem)
 	CreateRow(InItem);
 	for (auto Child : InItem->GetChildren())
 	{
-		CreateRow(Child.ToSharedRef());
 		BuildItems(Child.ToSharedRef());
 	}
 }

@@ -44,6 +44,7 @@ public class ZzRewindDebuggerEditor : ModuleRules
                 "LevelEditor",
                 "DeveloperSettings",
                 "ActorPickerMode",
+                "Projects",
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);

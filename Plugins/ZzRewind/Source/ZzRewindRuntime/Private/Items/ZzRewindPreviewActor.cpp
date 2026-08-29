@@ -27,7 +27,7 @@ void AZzRewindPreviewMeshActor::SetupFromSkMeshComp(USkeletalMeshComponent* InMe
 
 void AZzRewindPreviewMeshActor::SetupFromSkMeshAsset(USkeletalMesh* InMeshAsset)
 {
-	Mesh->SetSkeletalMeshAsset(InMeshAsset);
+	Mesh->SetSkeletalMesh(InMeshAsset, true);
 }
 
 void AZzRewindPreviewMeshActor::GuardSkMeshComp()

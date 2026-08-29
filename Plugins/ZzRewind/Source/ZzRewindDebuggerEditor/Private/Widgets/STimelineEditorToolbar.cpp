@@ -10,6 +10,7 @@
 #include "SlateOptMacros.h"
 #include "Styling/SlateIconFinder.h"
 #include "ZzRewindDebuggerEditorModule.h"
+#include "ZzRewindEditorStyle.h"
 
 namespace ZZ::Rewind
 {
@@ -96,7 +97,7 @@ void STimelineEditorToolbar::Construct(const FArguments& InArgs)
 	];
 
 
-	RewindDebugger->OnScrubFrameChanged.AddRaw(this, &STimelineEditorToolbar::OnScrubFrameChanged);
+	RewindDebugger->OnScrubFrameChanged.AddSP(this, &STimelineEditorToolbar::OnScrubFrameChanged);
 }
 
 void STimelineEditorToolbar::Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime)
@@ -277,9 +278,8 @@ FReply STimelineEditorToolbar::HandleToggleRecord()
 
 const FSlateBrush* STimelineEditorToolbar::GetToggleRecordIcon() const
 {
-	return FZzRewindRuntime::Get()->IsRecording()
-		? FSlateIconFinder::FindIcon("RewindDebugger.StopRecording.small").GetIcon()
-		: FSlateIconFinder::FindIcon("RewindDebugger.StartRecording.small").GetIcon();
+	const FName IconName = RewindDebugger->IsRecording() ? TEXT("ToolBar.StopRecording") : TEXT("ToolBar.StartRecording");
+	return FZzRewindEditorStyle::Get().GetBrush(IconName);
 }
 
 
@@ -309,9 +309,8 @@ FReply STimelineEditorToolbar::HandleTogglePlay()
 
 const FSlateBrush* STimelineEditorToolbar::GetTogglePlayIcon() const
 {
-	return bRewindPlaying
-		? FSlateIconFinder::FindIcon("RewindDebugger.Pause.small").GetIcon()
-		: FSlateIconFinder::FindIcon("RewindDebugger.Play.small").GetIcon();
+	const FName IconName = bRewindPlaying ? TEXT("ToolBar.Pause") : TEXT("ToolBar.Play");
+	return FZzRewindEditorStyle::Get().GetBrush(IconName);
 }
 
 void STimelineEditorToolbar::RewindPlay()
